@@ -1,5 +1,10 @@
 # KSUID - K-Sortable Unique Identifier
 
+[![PyPI version](https://badge.fury.io/py/ksuid-python.svg)](https://pypi.org/project/ksuid-python/)
+[![Python Version](https://img.shields.io/pypi/pyversions/ksuid-python.svg)](https://pypi.org/project/ksuid-python/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Downloads](https://pepy.tech/badge/ksuid-python)](https://pepy.tech/project/ksuid-python)
+
 A Python implementation of [KSUID](https://github.com/segmentio/ksuid) (K-Sortable Unique Identifier) for Python 3.13+.
 
 ## What is a KSUID?
@@ -73,8 +78,16 @@ product_id = f"prod_{generate()}"
 
 ## Installation
 
+Install from [PyPI](https://pypi.org/project/ksuid-python/):
+
 ```bash
-pip install ksuid
+pip install ksuid-python
+```
+
+**Note:** The package name is `ksuid-python`, but you import it as `ksuid`:
+
+```python
+from ksuid import generate  # Import name is 'ksuid'
 ```
 
 ## Quick Start
@@ -439,7 +452,7 @@ The KSUID library is thread-safe. Multiple threads can generate KSUIDs concurren
 
 ```bash
 # Clone repository
-git clone https://github.com/geneseas/ksuid-python.git
+git clone https://github.com/tonyzorin/ksuid-python.git
 cd ksuid-python
 
 # Install development dependencies
