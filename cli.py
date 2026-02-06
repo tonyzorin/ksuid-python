@@ -19,7 +19,10 @@ MAX_COUNT = 1_000_000
 
 def _validate_count(value):
     """Validate --count is a positive integer within bounds."""
-    ivalue = int(value)
+    try:
+        ivalue = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid integer value: {value!r}")
     if ivalue < 1:
         raise argparse.ArgumentTypeError("count must be at least 1")
     if ivalue > MAX_COUNT:

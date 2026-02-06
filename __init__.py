@@ -181,13 +181,10 @@ def _base62_encode(data: bytes) -> str:
     """Encode bytes to base62 string."""
     if not data:
         return ""
-    
+
     # Convert bytes to integer
     num = int.from_bytes(data, 'big')
-    
-    if num == 0:
-        return BASE62_ALPHABET[0]
-    
+
     result = []
     while num > 0:
         num, remainder = divmod(num, BASE62_BASE)

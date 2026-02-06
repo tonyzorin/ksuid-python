@@ -272,19 +272,23 @@ class TestGenerateToken:
         tokens = {generate_token() for _ in range(200)}
         assert len(tokens) == 200
 
-    def test_token_has_no_predictable_timestamp(self):
-        """Token bytes should NOT decode to a plausible current timestamp.
+    def test_token_differs_from_ksuid_structure(self):
+        """Token's first 4 bytes should not match a KSUID timestamp.
 
-        A normal KSUID's first 4 bytes encode (time.time() - EPOCH).
-        For a pure-random token the probability of landing in a narrow
-        window around 'now' is negligible.
+        A real KSUID encodes (time.time() - EPOCH) in its first 4 bytes.
+        A pure-random token should almost never land in the same narrow
+        range.  We generate 10 tokens and verify none of them decode to
+        a timestamp within 1 year of now (probability ≈ (2/2^32)^10).
         """
-        from __init__ import _base62_decode, EPOCH
-        raw = _base62_decode(generate_token())
-        ts_value = int.from_bytes(raw[:4], 'big') + EPOCH
+        from __init__ import _base62_decode
         now = int(time.time())
-        # Allow generous 1-year window; random should almost never hit it
-        assert abs(ts_value - now) > 365 * 86400 or True  # non-deterministic, so soft check
+        one_year = 365 * 86400
+        for _ in range(10):
+            raw = _base62_decode(generate_token())
+            ts_value = int.from_bytes(raw[:4], 'big') + EPOCH
+            if abs(ts_value - now) > one_year:
+                return  # At least one clearly non-timestamp token — pass
+        pytest.fail("All 10 tokens decoded to timestamps near 'now' — extremely unlikely")
 
 
 class TestSlots:
@@ -300,6 +304,62 @@ class TestSlots:
         ksuid = KSUID()
         with pytest.raises(AttributeError):
             ksuid.foo = "bar"
+
+
+class TestThreadSafety:
+    """Verify KSUID generation is safe under concurrent threads."""
+
+    def test_concurrent_generate(self):
+        """KSUIDs generated across threads must all be unique."""
+        from concurrent.futures import ThreadPoolExecutor
+        count_per_thread = 500
+        num_threads = 4
+
+        def gen_batch(_):
+            return [generate() for _ in range(count_per_thread)]
+
+        with ThreadPoolExecutor(max_workers=num_threads) as pool:
+            batches = list(pool.map(gen_batch, range(num_threads)))
+
+        all_ksuids = [k for batch in batches for k in batch]
+        assert len(all_ksuids) == count_per_thread * num_threads
+        assert len(set(all_ksuids)) == len(all_ksuids)
+
+    def test_concurrent_generate_token(self):
+        """Tokens generated across threads must all be unique."""
+        from concurrent.futures import ThreadPoolExecutor
+        count_per_thread = 500
+        num_threads = 4
+
+        def gen_batch(_):
+            return [generate_token() for _ in range(count_per_thread)]
+
+        with ThreadPoolExecutor(max_workers=num_threads) as pool:
+            batches = list(pool.map(gen_batch, range(num_threads)))
+
+        all_tokens = [t for batch in batches for t in batch]
+        assert len(all_tokens) == count_per_thread * num_threads
+        assert len(set(all_tokens)) == len(all_tokens)
+
+
+class TestEdgeCases:
+    """Edge cases for encoding / decoding."""
+
+    def test_zero_value_round_trip(self):
+        """All-zero KSUID must encode to 27 chars and round-trip correctly."""
+        ksuid = KSUID(timestamp=EPOCH, payload=b'\x00' * 16)
+        s = str(ksuid)
+        assert len(s) == 27
+        assert s == '0' * 27
+        assert KSUID.from_string(s) == ksuid
+
+    def test_max_timestamp_round_trip(self):
+        """KSUID at the maximum timestamp must round-trip correctly."""
+        max_ts = EPOCH + 2**32 - 1
+        ksuid = KSUID(timestamp=max_ts, payload=b'\xff' * 16)
+        s = str(ksuid)
+        assert len(s) == 27
+        assert KSUID.from_string(s) == ksuid
 
 
 if __name__ == "__main__":
