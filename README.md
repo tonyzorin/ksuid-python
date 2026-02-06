@@ -1,11 +1,9 @@
 # KSUID - K-Sortable Unique Identifier
 
-[![PyPI version](https://badge.fury.io/py/ksuid-python.svg)](https://pypi.org/project/ksuid-python/)
 [![Python Version](https://img.shields.io/pypi/pyversions/ksuid-python.svg)](https://pypi.org/project/ksuid-python/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Downloads](https://pepy.tech/badge/ksuid-python)](https://pepy.tech/project/ksuid-python)
 
-A Python implementation of [KSUID](https://github.com/segmentio/ksuid) (K-Sortable Unique Identifier) for Python 3.13+.
+A Python implementation of [KSUID](https://github.com/segmentio/ksuid) (K-Sortable Unique Identifier) for Python 3.9+.
 
 ## What is a KSUID?
 
@@ -14,9 +12,12 @@ A KSUID is a globally unique identifier similar to a UUID, but with better prope
 - **Sortable**: KSUIDs are naturally sortable by creation time
 - **Compact**: 27 characters when base62-encoded (vs 36 for UUID)
 - **URL-safe**: Uses base62 encoding (no special characters)
-- **Collision-resistant**: 128 bits of randomness per millisecond
+- **Collision-resistant**: 128 bits of randomness per second
 - **Time-based**: Encodes creation timestamp for easy debugging
 - **Prefix-friendly**: Can be prefixed for type identification (like Stripe's API keys)
+- **Lowercase option**: Base36 encoding for case-insensitive contexts (31 characters)
+- **Secure tokens**: Generate timestamp-free tokens with 160 bits of entropy
+- **Thread-safe**: Safe for concurrent use across multiple threads
 
 ## Format
 
@@ -24,94 +25,60 @@ A KSUID is a 20-byte identifier consisting of:
 - **4 bytes**: Timestamp (seconds since KSUID epoch: 2014-05-13 16:53:20 UTC)
 - **16 bytes**: Random payload
 
-When base62-encoded, it becomes a 27-character string like: `2StGMtcWzRJ8qZqQjbJjGdTkVfv`
-
-## Real-World Usage Examples
-
-Many successful companies use KSUID-style identifiers with prefixes for better developer experience:
-
-### Stripe-Style Prefixed IDs
-```python
-from ksuid import generate
-
-# Payment Intent: pi_1A2B3C...
-payment_intent = f"pi_{generate()}"
-
-# Customer: cus_1A2B3C...
-customer = f"cus_{generate()}"
-
-# Charge: ch_1A2B3C...
-charge = f"ch_{generate()}"
-```
-
-### GitHub-Style IDs
-```python
-# Repository: repo_1A2B3C...
-repository = f"repo_{generate()}"
-
-# Issue: issue_1A2B3C...
-issue = f"issue_{generate()}"
-
-# Pull Request: pr_1A2B3C...
-pull_request = f"pr_{generate()}"
-```
-
-### Database Entity IDs
-```python
-# User: user_1A2B3C...
-user_id = f"user_{generate()}"
-
-# Order: order_1A2B3C...
-order_id = f"order_{generate()}"
-
-# Product: prod_1A2B3C...
-product_id = f"prod_{generate()}"
-```
-
-### Benefits of Prefixed KSUIDs
-
-1. **Type Safety**: Immediately identify the entity type
-2. **Debugging**: Easier to trace issues in logs
-3. **API Design**: Self-documenting API endpoints
-4. **Database Queries**: Faster filtering by prefix
-5. **Developer Experience**: Clear, readable identifiers
-
-## Installation
-
-Install from [PyPI](https://pypi.org/project/ksuid-python/):
-
-```bash
-pip install ksuid-python
-```
-
-**Note:** The package name is `ksuid-python`, but you import it as `ksuid`:
-
-```python
-from ksuid import generate  # Import name is 'ksuid'
-```
+| Encoding | Characters | Alphabet | Use case |
+|----------|-----------|----------|----------|
+| Base62 (default) | 27 | `0-9A-Za-z` | Standard, compact |
+| Base36 (lowercase) | 31 | `0-9a-z` | Case-insensitive systems |
 
 ## Quick Start
 
 ```python
-from ksuid import KSUID, generate
+from ksuid import KSUID, generate, generate_lowercase
 
-# Generate a new KSUID
+# Generate a new KSUID (base62, mixed-case)
 ksuid = generate()
 print(ksuid)  # 2StGMtcWzRJ8qZqQjbJjGdTkVfv
 
+# Generate a lowercase KSUID (base36)
+lower_id = generate_lowercase()
+print(lower_id)  # 0c7de9014xkr8gqp3n7ewbz5jhr
+
 # Create from string
-ksuid2 = KSUID.from_string('2StGMtcWzRJ8qZqQjbJjGdTkVfv')
+ksuid2 = KSUID.from_string("2StGMtcWzRJ8qZqQjbJjGdTkVfv")
+
+# Convert between formats
+ksuid = KSUID()
+str(ksuid)          # Base62: "2StGMtcWzRJ8qZqQjbJjGdTkVfv" (27 chars)
+ksuid.to_base36()   # Base36: "0c7de9014xkr8gqp3n7ewbz5jhr" (31 chars)
 
 # KSUIDs are sortable
-ksuid1 = generate()
-time.sleep(0.001)
-ksuid2 = generate()
-assert ksuid1 < ksuid2  # True!
+ksuid_a = KSUID(timestamp=1609459200)
+ksuid_b = KSUID(timestamp=1609459201)
+assert ksuid_a < ksuid_b  # True!
 
 # Access timestamp and payload
-print(ksuid.datetime)  # 2025-01-17 10:30:45+00:00
-print(ksuid.timestamp)  # 1737108645
-print(len(ksuid.payload))  # 16 bytes
+print(ksuid.datetime)       # 2025-01-17 10:30:45+00:00
+print(ksuid.timestamp)      # 1737108645
+print(len(ksuid.payload))   # 16 bytes
+```
+
+## Secure Tokens
+
+For API keys, session tokens, and other security-sensitive values, use
+`generate_token()` or `generate_token_lowercase()`. These use 160 bits of
+`secrets.token_bytes` randomness with **no embedded timestamp**, so creation
+time cannot be leaked.
+
+```python
+from ksuid import generate_token, generate_token_lowercase
+
+# Mixed-case token (27 chars, base62, 160-bit entropy)
+api_key = f"sk_{generate_token()}"
+# sk_7kQ9xLm3RtN5vW8yBzCdEfGhJ
+
+# Lowercase token (31 chars, base36, 160-bit entropy)
+session = f"sess_{generate_token_lowercase()}"
+# sess_4f8a2bc90d1e3f5g6h7i8j9k0lm
 ```
 
 ## API Reference
@@ -129,90 +96,70 @@ KSUID(timestamp=None, payload=None)
 
 #### Class Methods
 
-```python
-KSUID.from_string(ksuid_str: str) -> KSUID
-```
-Create a KSUID from its base62 string representation.
-
-```python
-KSUID.from_bytes(data: bytes) -> KSUID
-```
-Create a KSUID from raw 20-byte data.
+| Method | Description |
+|--------|-------------|
+| `KSUID.from_string(s)` | Create from 27-char base62 string |
+| `KSUID.from_base36(s)` | Create from 31-char lowercase base36 string |
+| `KSUID.from_bytes(data)` | Create from raw 20-byte data |
 
 #### Properties
 
-- `timestamp`: Unix timestamp (int)
-- `datetime`: Python datetime object (UTC)
-- `payload`: 16-byte random payload (bytes)
-- `bytes`: Raw 20-byte KSUID data (bytes)
+| Property | Type | Description |
+|----------|------|-------------|
+| `timestamp` | `int` | Unix timestamp |
+| `datetime` | `datetime` | UTC datetime object |
+| `payload` | `bytes` | 16-byte random payload |
+| `bytes` | `bytes` | Raw 20-byte KSUID data |
 
 #### Methods
 
-- `__str__()`: Returns base62-encoded string representation
-- `__repr__()`: Returns developer-friendly representation
-- Comparison operators: `<`, `<=`, `>`, `>=`, `==`, `!=`
-- `__hash__()`: Makes KSUIDs hashable (usable in sets/dicts)
+| Method | Description |
+|--------|-------------|
+| `__str__()` | Base62-encoded string (27 chars) |
+| `to_base36()` | Base36-encoded lowercase string (31 chars) |
+| `__repr__()` | Developer-friendly representation |
+| `__hash__()` | Hashable (usable in sets/dicts) |
+| `<`, `<=`, `>`, `>=`, `==`, `!=` | Sortable comparison |
 
 ### Convenience Functions
 
-```python
-generate() -> KSUID
-```
-Generate a new KSUID with current timestamp.
-
-```python
-from_string(ksuid_str: str) -> KSUID
-```
-Create KSUID from string (alias for `KSUID.from_string`).
-
-```python
-from_bytes(data: bytes) -> KSUID
-```
-Create KSUID from bytes (alias for `KSUID.from_bytes`).
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `generate()` | `KSUID` | New KSUID with current timestamp |
+| `generate_lowercase()` | `str` | 31-char lowercase base36 KSUID (sortable) |
+| `generate_token()` | `str` | 27-char base62 secure token (no timestamp) |
+| `generate_token_lowercase()` | `str` | 31-char base36 secure token (no timestamp) |
+| `from_string(s)` | `KSUID` | Parse base62 string |
+| `from_base36(s)` | `KSUID` | Parse base36 string |
+| `from_bytes(data)` | `KSUID` | Parse raw bytes |
 
 ## Examples
-
-### Basic Usage
-
-```python
-from ksuid import KSUID, generate
-import time
-
-# Generate KSUIDs
-ksuid1 = generate()
-time.sleep(0.001)
-ksuid2 = generate()
-
-print(f"KSUID 1: {ksuid1}")
-print(f"KSUID 2: {ksuid2}")
-print(f"KSUID 1 < KSUID 2: {ksuid1 < ksuid2}")  # True
-```
 
 ### Prefixed IDs (Stripe-Style)
 
 ```python
-from ksuid import generate
+from ksuid import generate, generate_lowercase
 
-def create_prefixed_id(prefix: str) -> str:
-    """Create a prefixed ID like Stripe's API keys."""
-    return f"{prefix}_{generate()}"
+# Mixed-case prefixed IDs
+user_id = f"user_{generate()}"      # user_2StGMtcWzRJ8qZqQjbJjGdTkVfv
+payment_id = f"pi_{generate()}"     # pi_2StGMtcWzRJ8qZqQjbJjGdTkVfv
 
-# Create different entity types
-user_id = create_prefixed_id("user")        # user_2StGMtcWzRJ8qZqQjbJjGdTkVfv
-payment_id = create_prefixed_id("pi")       # pi_2StGMtcWzRJ8qZqQjbJjGdTkVfv
-customer_id = create_prefixed_id("cus")     # cus_2StGMtcWzRJ8qZqQjbJjGdTkVfv
+# Lowercase prefixed IDs
+user_id = f"user_{generate_lowercase()}"   # user_0c7de9014xkr8gqp3n7ewbz5jhr
+order_id = f"ord_{generate_lowercase()}"   # ord_0c7de9014xkr8gqp3n7ewbz5jhr
+```
 
-print(f"User ID: {user_id}")
-print(f"Payment ID: {payment_id}")
-print(f"Customer ID: {customer_id}")
+### Secure API Keys and Session Tokens
 
-# Extract KSUID from prefixed ID
-def extract_ksuid(prefixed_id: str) -> str:
-    """Extract KSUID from prefixed ID."""
-    return prefixed_id.split('_', 1)[1]
+```python
+from ksuid import generate_token, generate_token_lowercase
 
-ksuid_part = extract_ksuid(user_id)
-print(f"Extracted KSUID: {ksuid_part}")
+# API keys (no timestamp leakage, 160-bit entropy)
+secret_key = f"sk_{generate_token()}"
+public_key = f"pk_{generate_token()}"
+
+# Lowercase session tokens
+session_id = f"sess_{generate_token_lowercase()}"
 ```
 
 ### Custom Timestamp and Payload
@@ -233,14 +180,10 @@ ksuid = KSUID(payload=payload)
 ### Sorting and Comparison
 
 ```python
-from ksuid import generate
-import time
+from ksuid import KSUID, generate
 
-# Generate multiple KSUIDs
-ksuids = []
-for i in range(5):
-    ksuids.append(generate())
-    time.sleep(0.001)
+# Generate KSUIDs with different timestamps
+ksuids = [KSUID(timestamp=1609459200 + i) for i in range(5)]
 
 # They're naturally sorted by creation time
 sorted_ksuids = sorted(ksuids)
@@ -251,111 +194,44 @@ ksuid_set = set(ksuids)
 ksuid_dict = {k: f"value_{i}" for i, k in enumerate(ksuids)}
 ```
 
-### Database Usage
-
-```python
-from ksuid import generate
-import sqlite3
-
-# Create table with KSUID primary key
-conn = sqlite3.connect(':memory:')
-conn.execute('''
-    CREATE TABLE users (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        created_at DATETIME
-    )
-''')
-
-# Insert records with KSUID
-ksuid = generate()
-conn.execute(
-    'INSERT INTO users (id, name, created_at) VALUES (?, ?, ?)',
-    (str(ksuid), 'John Doe', ksuid.datetime)
-)
-
-# Query by KSUID
-cursor = conn.execute('SELECT * FROM users WHERE id = ?', (str(ksuid),))
-print(cursor.fetchone())
-```
-
-### Production API Example (Flask)
-
-```python
-from flask import Flask, jsonify, request
-from ksuid import generate
-import sqlite3
-
-app = Flask(__name__)
-
-def create_prefixed_id(prefix: str) -> str:
-    return f"{prefix}_{generate()}"
-
-@app.route('/api/users', methods=['POST'])
-def create_user():
-    data = request.json
-    user_id = create_prefixed_id("user")
-    
-    # Store in database
-    conn = sqlite3.connect('app.db')
-    conn.execute(
-        'INSERT INTO users (id, name, email) VALUES (?, ?, ?)',
-        (user_id, data['name'], data['email'])
-    )
-    conn.commit()
-    conn.close()
-    
-    return jsonify({
-        'id': user_id,
-        'name': data['name'],
-        'email': data['email']
-    }), 201
-
-@app.route('/api/users/<user_id>')
-def get_user(user_id):
-    # Validate prefix
-    if not user_id.startswith('user_'):
-        return jsonify({'error': 'Invalid user ID format'}), 400
-    
-    conn = sqlite3.connect('app.db')
-    cursor = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    
-    return jsonify({
-        'id': user[0],
-        'name': user[1],
-        'email': user[2]
-    })
-
-# Example usage:
-# POST /api/users -> {"id": "user_2StGMtcWzRJ8qZqQjbJjGdTkVfv", ...}
-# GET /api/users/user_2StGMtcWzRJ8qZqQjbJjGdTkVfv -> User details
-```
-
 ### Converting Between Formats
 
 ```python
-from ksuid import KSUID
+from ksuid import KSUID, from_base36
 
 # Start with a KSUID
 ksuid = KSUID()
 
 # Get different representations
-string_repr = str(ksuid)           # Base62 string
-bytes_repr = ksuid.bytes           # Raw bytes
-timestamp = ksuid.timestamp        # Unix timestamp
-datetime_obj = ksuid.datetime      # Python datetime
+b62 = str(ksuid)             # Base62: 27 chars
+b36 = ksuid.to_base36()      # Base36: 31 chars, lowercase
+raw = ksuid.bytes             # Raw: 20 bytes
 
-# Recreate from representations
-ksuid_from_string = KSUID.from_string(string_repr)
-ksuid_from_bytes = KSUID.from_bytes(bytes_repr)
+# Recreate from any representation
+assert KSUID.from_string(b62) == ksuid
+assert KSUID.from_base36(b36) == ksuid
+assert KSUID.from_bytes(raw) == ksuid
+```
 
-# All should be equal
-assert ksuid == ksuid_from_string == ksuid_from_bytes
+### Database Usage
+
+```python
+from ksuid import generate_lowercase
+import sqlite3
+
+conn = sqlite3.connect(':memory:')
+conn.execute('''
+    CREATE TABLE users (
+        id TEXT PRIMARY KEY,
+        name TEXT
+    )
+''')
+
+user_id = f"user_{generate_lowercase()}"
+conn.execute(
+    'INSERT INTO users (id, name) VALUES (?, ?)',
+    (user_id, 'John Doe')
+)
 ```
 
 ## Performance
@@ -365,87 +241,31 @@ KSUIDs are designed to be fast and efficient:
 - **Generation**: ~1-2 microseconds per KSUID
 - **Parsing**: ~500 nanoseconds from string
 - **Comparison**: ~100 nanoseconds
-- **Memory**: 20 bytes per KSUID + Python object overhead
+- **Memory**: Optimized with `__slots__` (~48 bytes per instance)
 
 ## Comparison with UUIDs
 
-| Feature | KSUID | UUID v4 | UUID v1 | Stripe IDs |
-|---------|-------|---------|---------|------------|
-| Length | 27 chars | 36 chars | 36 chars | 24-28 chars |
-| Sortable | ✅ Yes | ❌ No | ⚠️ Partially | ❌ No |
-| URL-safe | ✅ Yes | ❌ No (hyphens) | ❌ No (hyphens) | ✅ Yes |
-| Timestamp | ✅ Readable | ❌ No | ✅ But complex | ❌ No |
-| Collision resistance | ✅ High | ✅ High | ✅ High | ✅ High |
-| Monotonic | ✅ Yes | ❌ No | ⚠️ Partially | ❌ No |
-| Prefix support | ✅ Natural | ❌ Awkward | ❌ Awkward | ✅ Built-in |
-| Developer UX | ✅ Excellent | ⚠️ Good | ⚠️ Good | ✅ Excellent |
-
-## Industry Adoption & Best Practices
-
-### Companies Using KSUID-Style IDs
-
-Many successful companies use sortable, prefixed identifiers:
-
-- **Stripe**: `pi_1A2B3C...`, `cus_1A2B3C...`, `ch_1A2B3C...`
-- **GitHub**: Repository and issue IDs with chronological ordering
-- **Slack**: Channel and message IDs for efficient sorting
-- **Discord**: Snowflake IDs (similar concept with timestamps)
-- **Twitter**: Tweet IDs (chronologically sortable)
-
-### Prefix Naming Conventions
-
-Common patterns for prefixes:
-
-```python
-# Entity types (3-4 chars)
-user_id = f"user_{generate()}"      # Users
-prod_id = f"prod_{generate()}"      # Products
-ord_id = f"ord_{generate()}"        # Orders
-
-# Action types (2-3 chars)
-payment_id = f"pi_{generate()}"     # Payment Intent (Stripe style)
-charge_id = f"ch_{generate()}"      # Charge
-refund_id = f"re_{generate()}"      # Refund
-
-# Short codes (2-3 chars)
-api_key = f"sk_{generate()}"        # Secret Key
-pub_key = f"pk_{generate()}"        # Public Key
-token = f"tok_{generate()}"         # Token
-```
-
-### Database Design Tips
-
-```sql
--- Index on prefix for fast filtering
-CREATE INDEX idx_users_by_type ON transactions(id) WHERE id LIKE 'user_%';
-
--- Partial indexes for different entity types
-CREATE INDEX idx_payments ON transactions(id) WHERE id LIKE 'pi_%';
-CREATE INDEX idx_refunds ON transactions(id) WHERE id LIKE 're_%';
-```
-
-### API Design Patterns
-
-```python
-# RESTful endpoints with typed IDs
-GET /api/users/user_2StGMtcWzRJ8qZqQjbJjGdTkVfv
-GET /api/payments/pi_2StGMtcWzRJ8qZqQjbJjGdTkVfv
-GET /api/orders/ord_2StGMtcWzRJ8qZqQjbJjGdTkVfv
-
-# Validation middleware
-def validate_entity_id(entity_type, entity_id):
-    if not entity_id.startswith(f"{entity_type}_"):
-        raise ValueError(f"Invalid {entity_type} ID format")
-    return entity_id.split('_', 1)[1]  # Return KSUID part
-```
+| Feature | KSUID | UUID v4 | Stripe IDs |
+|---------|-------|---------|------------|
+| Length | 27 chars (base62) / 31 chars (base36) | 36 chars | 24-28 chars |
+| Sortable | Yes | No | No |
+| URL-safe | Yes | No (hyphens) | Yes |
+| Timestamp | Readable | No | No |
+| Collision resistance | High (128 bits) | High (122 bits) | High |
+| Lowercase option | Yes (base36) | Yes (already) | No |
+| Secure tokens | Yes (`generate_token`) | No | No |
+| Thread-safe | Yes | Yes | Yes |
 
 ## Thread Safety
 
-The KSUID library is thread-safe. Multiple threads can generate KSUIDs concurrently without coordination.
+The KSUID library is fully thread-safe. All functions use only thread-safe
+primitives (`os.urandom`, `secrets.token_bytes`, `time.time`) and KSUID
+instances are immutable after construction. Safe even under free-threaded
+Python 3.13+ (no-GIL).
 
 ## Requirements
 
-- Python 3.13 or later
+- Python 3.9 or later
 - No external dependencies
 
 ## Development
@@ -456,19 +276,19 @@ git clone https://github.com/tonyzorin/ksuid-python.git
 cd ksuid-python
 
 # Install development dependencies
-pip install -e ".[dev]"
+pip install pytest pytest-cov black flake8 mypy
 
 # Run tests
-pytest
+pytest test_ksuid.py -v
 
 # Run tests with coverage
-pytest --cov=ksuid
+pytest test_ksuid.py --cov=ksuid
 
 # Format code
 black .
 
-# Type checking
-mypy ksuid/
+# Lint
+flake8 . --max-line-length=88 --extend-ignore=E203,W503
 ```
 
 ## License
@@ -482,4 +302,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## References
 
 - [Original KSUID specification](https://github.com/segmentio/ksuid)
-- [KSUID in other languages](https://github.com/segmentio/ksuid#other-implementations) 
+- [KSUID in other languages](https://github.com/segmentio/ksuid#other-implementations)
