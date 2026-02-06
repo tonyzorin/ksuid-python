@@ -27,7 +27,7 @@ from typing import Union, Optional
 __version__ = "1.0.0"
 __all__ = ["KSUID", "generate", "from_string", "from_bytes"]
 
-# KSUID epoch (January 1, 2014 UTC)
+# KSUID epoch (May 13, 2014 16:53:20 UTC)
 EPOCH = 1400000000
 
 # KSUID components
@@ -147,7 +147,7 @@ class KSUID:
     
     def __eq__(self, other) -> bool:
         if not isinstance(other, KSUID):
-            return False
+            return NotImplemented
         return self._bytes == other._bytes
     
     def __lt__(self, other) -> bool:
@@ -196,17 +196,27 @@ def _base62_encode(data: bytes) -> str:
     return encoded.zfill(27)
 
 
+_BASE62_LOOKUP = {c: i for i, c in enumerate(BASE62_ALPHABET)}
+
+# Maximum integer value that fits in TOTAL_LENGTH bytes
+_MAX_ENCODED = (1 << (TOTAL_LENGTH * 8)) - 1
+
+
 def _base62_decode(s: str) -> bytes:
     """Decode base62 string to bytes."""
     if not s:
         return b""
-    
+
     num = 0
     for char in s:
-        if char not in BASE62_ALPHABET:
+        val = _BASE62_LOOKUP.get(char)
+        if val is None:
             raise ValueError(f"Invalid base62 character: {char}")
-        num = num * BASE62_BASE + BASE62_ALPHABET.index(char)
-    
+        num = num * BASE62_BASE + val
+
+    if num > _MAX_ENCODED:
+        raise ValueError("Base62 value exceeds maximum for KSUID")
+
     # Convert to bytes (20 bytes for KSUID)
     return num.to_bytes(TOTAL_LENGTH, 'big')
 

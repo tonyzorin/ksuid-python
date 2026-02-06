@@ -90,6 +90,11 @@ class TestKSUID:
         """Test that invalid base62 characters raise error."""
         with pytest.raises(ValueError, match="Invalid base62 character"):
             KSUID.from_string("!" * 27)  # Invalid character
+
+    def test_from_string_overflow(self):
+        """Test that a base62 string exceeding 20-byte max raises ValueError."""
+        with pytest.raises(ValueError, match="Base62 value exceeds maximum"):
+            KSUID.from_string("z" * 27)  # Exceeds 2^160 - 1
     
     def test_from_bytes(self):
         """Test creating KSUID from bytes."""
@@ -134,13 +139,20 @@ class TestKSUID:
         payload = b'\x01' * 16
         ksuid1 = KSUID(timestamp=timestamp, payload=payload)
         ksuid2 = KSUID(timestamp=timestamp, payload=payload)
-        
+
         assert ksuid1 == ksuid2
         assert hash(ksuid1) == hash(ksuid2)
-        
+
         # Different payload should not be equal
         ksuid3 = KSUID(timestamp=timestamp, payload=b'\x02' * 16)
         assert ksuid1 != ksuid3
+
+    def test_equality_with_non_ksuid(self):
+        """Test that __eq__ returns NotImplemented for non-KSUID types."""
+        ksuid = KSUID()
+        assert ksuid.__eq__("not a ksuid") is NotImplemented
+        assert ksuid.__eq__(42) is NotImplemented
+        assert ksuid.__eq__(None) is NotImplemented
     
     def test_string_representation(self):
         """Test string and repr methods."""

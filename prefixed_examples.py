@@ -87,9 +87,9 @@ class PrefixedKSUID:
         if not prefix:
             raise ValueError("Prefix cannot be empty")
         
-        # Validate prefix format (alphanumeric and underscores only)
-        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', prefix):
-            raise ValueError("Prefix must start with a letter and contain only alphanumeric characters and underscores")
+        # Validate prefix format (alphanumeric only, no underscores since _ is the delimiter)
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9]*$', prefix):
+            raise ValueError("Prefix must start with a letter and contain only alphanumeric characters")
         
         return f"{prefix}_{generate()}"
     
@@ -194,11 +194,23 @@ def create_order_id() -> str:
     return PrefixedKSUID.create('ord')
 
 def create_api_key() -> str:
-    """Create an API key: ak_..."""
+    """Create an API key identifier: ak_...
+
+    WARNING: KSUIDs are not cryptographically suitable as secret API keys.
+    They embed a predictable timestamp and have only 128 bits of randomness.
+    Use this for public API key *identifiers* only, not for secret tokens.
+    For secrets, use the ``secrets`` module instead.
+    """
     return PrefixedKSUID.create('ak')
 
 def create_session_id() -> str:
-    """Create a session ID: sess_..."""
+    """Create a session identifier: sess_...
+
+    WARNING: KSUIDs should not be used as session tokens for authentication.
+    They embed a predictable timestamp and have only 128 bits of randomness.
+    Use this for session *identifiers* in logs/tracing, not as bearer tokens.
+    For session secrets, use the ``secrets`` module instead.
+    """
     return PrefixedKSUID.create('sess')
 
 
