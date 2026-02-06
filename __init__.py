@@ -20,14 +20,15 @@ Usage:
 """
 
 import os
+import secrets
 import time
 from datetime import datetime, timezone
 from typing import Union, Optional
 
 __version__ = "1.0.0"
-__all__ = ["KSUID", "generate", "from_string", "from_bytes"]
+__all__ = ["KSUID", "generate", "generate_token", "from_string", "from_bytes"]
 
-# KSUID epoch (January 1, 2014 UTC)
+# KSUID epoch (May 13, 2014 16:53:20 UTC)
 EPOCH = 1400000000
 
 # KSUID components
@@ -43,14 +44,16 @@ BASE62_BASE = len(BASE62_ALPHABET)
 class KSUID:
     """
     K-Sortable Unique Identifier
-    
+
     A KSUID is a 20-byte identifier consisting of:
     - 4-byte timestamp (seconds since KSUID epoch)
     - 16-byte random payload
-    
+
     KSUIDs are naturally sortable by creation time and collision-resistant.
     """
-    
+
+    __slots__ = ('_timestamp', '_payload', '_bytes')
+
     def __init__(self, timestamp: Optional[int] = None, payload: Optional[bytes] = None):
         """
         Create a new KSUID.
@@ -147,7 +150,7 @@ class KSUID:
     
     def __eq__(self, other) -> bool:
         if not isinstance(other, KSUID):
-            return False
+            return NotImplemented
         return self._bytes == other._bytes
     
     def __lt__(self, other) -> bool:
@@ -178,13 +181,10 @@ def _base62_encode(data: bytes) -> str:
     """Encode bytes to base62 string."""
     if not data:
         return ""
-    
+
     # Convert bytes to integer
     num = int.from_bytes(data, 'big')
-    
-    if num == 0:
-        return BASE62_ALPHABET[0]
-    
+
     result = []
     while num > 0:
         num, remainder = divmod(num, BASE62_BASE)
@@ -196,17 +196,27 @@ def _base62_encode(data: bytes) -> str:
     return encoded.zfill(27)
 
 
+_BASE62_LOOKUP = {c: i for i, c in enumerate(BASE62_ALPHABET)}
+
+# Maximum integer value that fits in TOTAL_LENGTH bytes
+_MAX_ENCODED = (1 << (TOTAL_LENGTH * 8)) - 1
+
+
 def _base62_decode(s: str) -> bytes:
     """Decode base62 string to bytes."""
     if not s:
         return b""
-    
+
     num = 0
     for char in s:
-        if char not in BASE62_ALPHABET:
+        val = _BASE62_LOOKUP.get(char)
+        if val is None:
             raise ValueError(f"Invalid base62 character: {char}")
-        num = num * BASE62_BASE + BASE62_ALPHABET.index(char)
-    
+        num = num * BASE62_BASE + val
+
+    if num > _MAX_ENCODED:
+        raise ValueError("Base62 value exceeds maximum for KSUID")
+
     # Convert to bytes (20 bytes for KSUID)
     return num.to_bytes(TOTAL_LENGTH, 'big')
 
@@ -215,6 +225,20 @@ def _base62_decode(s: str) -> bytes:
 def generate() -> KSUID:
     """Generate a new KSUID."""
     return KSUID()
+
+
+def generate_token() -> str:
+    """Generate a cryptographically secure opaque token as a base62 string.
+
+    Unlike KSUIDs, tokens use 20 bytes (160 bits) of pure random data from
+    ``secrets.token_bytes`` with no embedded timestamp.  This makes them
+    suitable for API keys, session secrets, and other security-sensitive
+    values where the creation time should not be leaked.
+
+    Returns:
+        A 27-character base62 string with 160 bits of entropy.
+    """
+    return _base62_encode(secrets.token_bytes(TOTAL_LENGTH))
 
 
 def from_string(ksuid_str: str) -> KSUID:

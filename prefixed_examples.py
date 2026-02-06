@@ -10,7 +10,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from __init__ import KSUID, generate, from_string
+from __init__ import KSUID, generate, generate_token, from_string
 from typing import Dict, Optional, Tuple
 import re
 
@@ -87,9 +87,9 @@ class PrefixedKSUID:
         if not prefix:
             raise ValueError("Prefix cannot be empty")
         
-        # Validate prefix format (alphanumeric and underscores only)
-        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', prefix):
-            raise ValueError("Prefix must start with a letter and contain only alphanumeric characters and underscores")
+        # Validate prefix format (alphanumeric only, no underscores since _ is the delimiter)
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9]*$', prefix):
+            raise ValueError("Prefix must start with a letter and contain only alphanumeric characters")
         
         return f"{prefix}_{generate()}"
     
@@ -194,12 +194,20 @@ def create_order_id() -> str:
     return PrefixedKSUID.create('ord')
 
 def create_api_key() -> str:
-    """Create an API key: ak_..."""
-    return PrefixedKSUID.create('ak')
+    """Create a secure API key: ak_...
+
+    Uses 160 bits of cryptographically secure random data (no timestamp)
+    via ``generate_token()``, making it safe for use as a secret key.
+    """
+    return f"ak_{generate_token()}"
 
 def create_session_id() -> str:
-    """Create a session ID: sess_..."""
-    return PrefixedKSUID.create('sess')
+    """Create a secure session token: sess_...
+
+    Uses 160 bits of cryptographically secure random data (no timestamp)
+    via ``generate_token()``, making it safe for use as a bearer token.
+    """
+    return f"sess_{generate_token()}"
 
 
 def demo_basic_usage():

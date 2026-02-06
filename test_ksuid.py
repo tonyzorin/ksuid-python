@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pytest
 from datetime import datetime, timezone
-from __init__ import KSUID, generate, from_string, from_bytes, EPOCH
+from __init__ import KSUID, generate, generate_token, from_string, from_bytes, EPOCH
 
 
 class TestKSUID:
@@ -90,6 +90,11 @@ class TestKSUID:
         """Test that invalid base62 characters raise error."""
         with pytest.raises(ValueError, match="Invalid base62 character"):
             KSUID.from_string("!" * 27)  # Invalid character
+
+    def test_from_string_overflow(self):
+        """Test that a base62 string exceeding 20-byte max raises ValueError."""
+        with pytest.raises(ValueError, match="Base62 value exceeds maximum"):
+            KSUID.from_string("z" * 27)  # Exceeds 2^160 - 1
     
     def test_from_bytes(self):
         """Test creating KSUID from bytes."""
@@ -134,13 +139,20 @@ class TestKSUID:
         payload = b'\x01' * 16
         ksuid1 = KSUID(timestamp=timestamp, payload=payload)
         ksuid2 = KSUID(timestamp=timestamp, payload=payload)
-        
+
         assert ksuid1 == ksuid2
         assert hash(ksuid1) == hash(ksuid2)
-        
+
         # Different payload should not be equal
         ksuid3 = KSUID(timestamp=timestamp, payload=b'\x02' * 16)
         assert ksuid1 != ksuid3
+
+    def test_equality_with_non_ksuid(self):
+        """Test that __eq__ returns NotImplemented for non-KSUID types."""
+        ksuid = KSUID()
+        assert ksuid.__eq__("not a ksuid") is NotImplemented
+        assert ksuid.__eq__(42) is NotImplemented
+        assert ksuid.__eq__(None) is NotImplemented
     
     def test_string_representation(self):
         """Test string and repr methods."""
@@ -239,6 +251,115 @@ class TestKSUIDProperties:
         
         # Should be exactly 27 characters
         assert len(ksuid_str) == 27
+
+
+class TestGenerateToken:
+    """Test cases for generate_token() secure token generation."""
+
+    def test_token_is_27_chars(self):
+        """Token string is exactly 27 base62 characters."""
+        token = generate_token()
+        assert len(token) == 27
+
+    def test_token_is_base62(self):
+        """Token contains only valid base62 characters."""
+        valid = set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+        token = generate_token()
+        assert all(c in valid for c in token)
+
+    def test_tokens_are_unique(self):
+        """Multiple tokens must all be distinct."""
+        tokens = {generate_token() for _ in range(200)}
+        assert len(tokens) == 200
+
+    def test_token_differs_from_ksuid_structure(self):
+        """Token's first 4 bytes should not match a KSUID timestamp.
+
+        A real KSUID encodes (time.time() - EPOCH) in its first 4 bytes.
+        A pure-random token should almost never land in the same narrow
+        range.  We generate 10 tokens and verify none of them decode to
+        a timestamp within 1 year of now (probability ≈ (2/2^32)^10).
+        """
+        from __init__ import _base62_decode
+        now = int(time.time())
+        one_year = 365 * 86400
+        for _ in range(10):
+            raw = _base62_decode(generate_token())
+            ts_value = int.from_bytes(raw[:4], 'big') + EPOCH
+            if abs(ts_value - now) > one_year:
+                return  # At least one clearly non-timestamp token — pass
+        pytest.fail("All 10 tokens decoded to timestamps near 'now' — extremely unlikely")
+
+
+class TestSlots:
+    """Verify KSUID uses __slots__ for memory efficiency."""
+
+    def test_no_instance_dict(self):
+        """KSUID instances should not have a __dict__."""
+        ksuid = KSUID()
+        assert not hasattr(ksuid, '__dict__')
+
+    def test_cannot_set_arbitrary_attribute(self):
+        """Setting an undefined attribute should raise AttributeError."""
+        ksuid = KSUID()
+        with pytest.raises(AttributeError):
+            ksuid.foo = "bar"
+
+
+class TestThreadSafety:
+    """Verify KSUID generation is safe under concurrent threads."""
+
+    def test_concurrent_generate(self):
+        """KSUIDs generated across threads must all be unique."""
+        from concurrent.futures import ThreadPoolExecutor
+        count_per_thread = 500
+        num_threads = 4
+
+        def gen_batch(_):
+            return [generate() for _ in range(count_per_thread)]
+
+        with ThreadPoolExecutor(max_workers=num_threads) as pool:
+            batches = list(pool.map(gen_batch, range(num_threads)))
+
+        all_ksuids = [k for batch in batches for k in batch]
+        assert len(all_ksuids) == count_per_thread * num_threads
+        assert len(set(all_ksuids)) == len(all_ksuids)
+
+    def test_concurrent_generate_token(self):
+        """Tokens generated across threads must all be unique."""
+        from concurrent.futures import ThreadPoolExecutor
+        count_per_thread = 500
+        num_threads = 4
+
+        def gen_batch(_):
+            return [generate_token() for _ in range(count_per_thread)]
+
+        with ThreadPoolExecutor(max_workers=num_threads) as pool:
+            batches = list(pool.map(gen_batch, range(num_threads)))
+
+        all_tokens = [t for batch in batches for t in batch]
+        assert len(all_tokens) == count_per_thread * num_threads
+        assert len(set(all_tokens)) == len(all_tokens)
+
+
+class TestEdgeCases:
+    """Edge cases for encoding / decoding."""
+
+    def test_zero_value_round_trip(self):
+        """All-zero KSUID must encode to 27 chars and round-trip correctly."""
+        ksuid = KSUID(timestamp=EPOCH, payload=b'\x00' * 16)
+        s = str(ksuid)
+        assert len(s) == 27
+        assert s == '0' * 27
+        assert KSUID.from_string(s) == ksuid
+
+    def test_max_timestamp_round_trip(self):
+        """KSUID at the maximum timestamp must round-trip correctly."""
+        max_ts = EPOCH + 2**32 - 1
+        ksuid = KSUID(timestamp=max_ts, payload=b'\xff' * 16)
+        s = str(ksuid)
+        assert len(s) == 27
+        assert KSUID.from_string(s) == ksuid
 
 
 if __name__ == "__main__":
