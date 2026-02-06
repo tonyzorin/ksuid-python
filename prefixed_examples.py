@@ -357,9 +357,9 @@ def demo_error_handling():
     for test_input, description in test_cases:
         try:
             prefix, ksuid = PrefixedKSUID.parse(test_input)
-            print(f"✅ {description}: Parsed successfully")
+            print(f"[ok] {description}: Parsed successfully")
         except ValueError as e:
-            print(f"❌ {description}: {e}")
+            print(f"[err] {description}: {e}")
     print()
 
 
@@ -377,13 +377,13 @@ def main():
 
     print("=== Summary ===")
     print("Prefixed KSUIDs provide:")
-    print("✅ Type safety through prefixes")
-    print("✅ Chronological ordering")
-    print("✅ URL-safe identifiers")
-    print("✅ Easy validation and parsing")
-    print("✅ Database-friendly design")
-    print("✅ Developer-friendly APIs")
-    print("✅ Industry-standard patterns")
+    print("[+] Type safety through prefixes")
+    print("[+] Chronological ordering")
+    print("[+] URL-safe identifiers")
+    print("[+] Easy validation and parsing")
+    print("[+] Database-friendly design")
+    print("[+] Developer-friendly APIs")
+    print("[+] Industry-standard patterns")
 
 
 if __name__ == "__main__":

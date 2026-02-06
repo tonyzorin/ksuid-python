@@ -197,12 +197,12 @@ def main():
 
     print("=== Summary ===")
     print("KSUIDs provide:")
-    print("✅ Sortable unique identifiers")
-    print("✅ Compact 27-character representation")
-    print("✅ URL-safe base62 encoding")
-    print("✅ Embedded timestamp for debugging")
-    print("✅ High performance and collision resistance")
-    print("✅ Perfect for distributed systems and databases")
+    print("[+] Sortable unique identifiers")
+    print("[+] Compact 27-character representation")
+    print("[+] URL-safe base62 encoding")
+    print("[+] Embedded timestamp for debugging")
+    print("[+] High performance and collision resistance")
+    print("[+] Perfect for distributed systems and databases")
 
 
 if __name__ == "__main__":

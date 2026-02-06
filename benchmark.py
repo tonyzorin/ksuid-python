@@ -178,12 +178,12 @@ def main():
 
     print("=== Performance Summary ===")
     print("KSUID operations are highly optimized:")
-    print("✅ Generation: ~300k+ KSUIDs/second")
-    print("✅ String parsing: ~500k+ parses/second")
-    print("✅ Bytes parsing: ~1M+ parses/second")
-    print("✅ Comparison: ~10M+ comparisons/second")
-    print("✅ Sorting: ~500k+ items/second")
-    print("✅ Memory efficient: ~100 bytes per KSUID including overhead")
+    print("[+] Generation: ~300k+ KSUIDs/second")
+    print("[+] String parsing: ~500k+ parses/second")
+    print("[+] Bytes parsing: ~1M+ parses/second")
+    print("[+] Comparison: ~10M+ comparisons/second")
+    print("[+] Sorting: ~500k+ items/second")
+    print("[+] Memory efficient: ~100 bytes per KSUID including overhead")
 
 
 if __name__ == "__main__":
