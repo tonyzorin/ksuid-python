@@ -25,7 +25,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __all__ = [
     "KSUID",
     "generate",
