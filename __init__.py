@@ -26,7 +26,12 @@ from datetime import datetime, timezone
 from typing import Union, Optional
 
 __version__ = "1.0.0"
-__all__ = ["KSUID", "generate", "generate_token", "from_string", "from_bytes"]
+__all__ = [
+    "KSUID",
+    "generate", "generate_lowercase",
+    "generate_token", "generate_token_lowercase",
+    "from_string", "from_base36", "from_bytes",
+]
 
 # KSUID epoch (May 13, 2014 16:53:20 UTC)
 EPOCH = 1400000000
@@ -36,9 +41,15 @@ TIMESTAMP_LENGTH = 4  # 4 bytes for timestamp
 PAYLOAD_LENGTH = 16   # 16 bytes for random payload
 TOTAL_LENGTH = TIMESTAMP_LENGTH + PAYLOAD_LENGTH  # 20 bytes total
 
-# Base62 alphabet for encoding
+# Base62 alphabet for encoding (mixed-case)
 BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 BASE62_BASE = len(BASE62_ALPHABET)
+_BASE62_STRING_LENGTH = 27  # 20 bytes in base62
+
+# Base36 alphabet for lowercase encoding
+BASE36_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"
+BASE36_BASE = len(BASE36_ALPHABET)
+_BASE36_STRING_LENGTH = 31  # 20 bytes in base36
 
 
 class KSUID:
@@ -92,13 +103,34 @@ class KSUID:
         Returns:
             KSUID instance
         """
-        if len(ksuid_str) != 27:
-            raise ValueError("KSUID string must be exactly 27 characters")
-        
+        if len(ksuid_str) != _BASE62_STRING_LENGTH:
+            raise ValueError(f"KSUID string must be exactly {_BASE62_STRING_LENGTH} characters")
+
         # Decode from base62
         decoded_bytes = _base62_decode(ksuid_str)
         return cls.from_bytes(decoded_bytes)
     
+    @classmethod
+    def from_base36(cls, ksuid_str: str) -> 'KSUID':
+        """
+        Create a KSUID from a lowercase base36 string representation.
+
+        Args:
+            ksuid_str: Base36-encoded KSUID string (31 characters)
+
+        Returns:
+            KSUID instance
+        """
+        if len(ksuid_str) != _BASE36_STRING_LENGTH:
+            raise ValueError(f"Base36 KSUID string must be exactly {_BASE36_STRING_LENGTH} characters")
+
+        decoded_bytes = _base36_decode(ksuid_str)
+        return cls.from_bytes(decoded_bytes)
+
+    def to_base36(self) -> str:
+        """Return a lowercase base36-encoded string (31 characters)."""
+        return _base36_encode(self._bytes)
+
     @classmethod
     def from_bytes(cls, data: bytes) -> 'KSUID':
         """
@@ -190,10 +222,10 @@ def _base62_encode(data: bytes) -> str:
         num, remainder = divmod(num, BASE62_BASE)
         result.append(BASE62_ALPHABET[remainder])
     
-    # Pad to 27 characters for KSUID
+    # Pad to fixed width for KSUID
     result.reverse()
     encoded = ''.join(result)
-    return encoded.zfill(27)
+    return encoded.zfill(_BASE62_STRING_LENGTH)
 
 
 _BASE62_LOOKUP = {c: i for i, c in enumerate(BASE62_ALPHABET)}
@@ -221,6 +253,46 @@ def _base62_decode(s: str) -> bytes:
     return num.to_bytes(TOTAL_LENGTH, 'big')
 
 
+# --- Base36 (lowercase) encoding ---------------------------------------------------
+
+_BASE36_LOOKUP = {c: i for i, c in enumerate(BASE36_ALPHABET)}
+
+
+def _base36_encode(data: bytes) -> str:
+    """Encode bytes to lowercase base36 string."""
+    if not data:
+        return ""
+
+    num = int.from_bytes(data, 'big')
+
+    result = []
+    while num > 0:
+        num, remainder = divmod(num, BASE36_BASE)
+        result.append(BASE36_ALPHABET[remainder])
+
+    result.reverse()
+    encoded = ''.join(result)
+    return encoded.zfill(_BASE36_STRING_LENGTH)
+
+
+def _base36_decode(s: str) -> bytes:
+    """Decode lowercase base36 string to bytes."""
+    if not s:
+        return b""
+
+    num = 0
+    for char in s:
+        val = _BASE36_LOOKUP.get(char)
+        if val is None:
+            raise ValueError(f"Invalid base36 character: {char!r}")
+        num = num * BASE36_BASE + val
+
+    if num > _MAX_ENCODED:
+        raise ValueError("Base36 value exceeds maximum for KSUID")
+
+    return num.to_bytes(TOTAL_LENGTH, 'big')
+
+
 # Convenience functions
 def generate() -> KSUID:
     """Generate a new KSUID."""
@@ -241,11 +313,40 @@ def generate_token() -> str:
     return _base62_encode(secrets.token_bytes(TOTAL_LENGTH))
 
 
+def generate_lowercase() -> str:
+    """Generate a new KSUID and return it as a lowercase base36 string.
+
+    The returned 31-character string uses only ``0-9a-z`` and preserves
+    the KSUID's timestamp + random-payload structure (sortable).
+
+    Returns:
+        A 31-character lowercase base36 string.
+    """
+    return KSUID().to_base36()
+
+
+def generate_token_lowercase() -> str:
+    """Generate a cryptographically secure opaque token as a lowercase string.
+
+    Uses 20 bytes (160 bits) of pure random data (no timestamp) encoded
+    in base36 (``0-9a-z`` only).
+
+    Returns:
+        A 31-character lowercase base36 string with 160 bits of entropy.
+    """
+    return _base36_encode(secrets.token_bytes(TOTAL_LENGTH))
+
+
 def from_string(ksuid_str: str) -> KSUID:
     """Create a KSUID from its string representation."""
     return KSUID.from_string(ksuid_str)
 
 
+def from_base36(ksuid_str: str) -> KSUID:
+    """Create a KSUID from a lowercase base36 string representation."""
+    return KSUID.from_base36(ksuid_str)
+
+
 def from_bytes(data: bytes) -> KSUID:
     """Create a KSUID from raw bytes."""
-    return KSUID.from_bytes(data) 
+    return KSUID.from_bytes(data)

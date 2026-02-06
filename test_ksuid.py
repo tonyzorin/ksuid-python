@@ -9,7 +9,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pytest
 from datetime import datetime, timezone
-from __init__ import KSUID, generate, generate_token, from_string, from_bytes, EPOCH
+from __init__ import (
+    KSUID, generate, generate_lowercase, generate_token, generate_token_lowercase,
+    from_string, from_base36, from_bytes, EPOCH,
+    _BASE36_STRING_LENGTH,
+)
 
 
 class TestKSUID:
@@ -342,6 +346,105 @@ class TestThreadSafety:
         assert len(set(all_tokens)) == len(all_tokens)
 
 
+class TestLowercase:
+    """Test base36 lowercase encoding/decoding."""
+
+    def test_generate_lowercase_length(self):
+        """Lowercase KSUID must be exactly 31 characters."""
+        s = generate_lowercase()
+        assert len(s) == _BASE36_STRING_LENGTH
+
+    def test_generate_lowercase_charset(self):
+        """Lowercase KSUID must contain only 0-9a-z."""
+        valid = set("0123456789abcdefghijklmnopqrstuvwxyz")
+        s = generate_lowercase()
+        assert all(c in valid for c in s), f"invalid chars in {s!r}"
+
+    def test_generate_lowercase_has_no_uppercase(self):
+        """Must not contain any uppercase letter."""
+        for _ in range(50):
+            s = generate_lowercase()
+            assert s == s.lower(), f"uppercase found in {s!r}"
+
+    def test_lowercase_round_trip(self):
+        """KSUID -> to_base36 -> from_base36 must preserve identity."""
+        ksuid = KSUID()
+        b36 = ksuid.to_base36()
+        restored = KSUID.from_base36(b36)
+        assert ksuid == restored
+        assert ksuid.timestamp == restored.timestamp
+        assert ksuid.payload == restored.payload
+
+    def test_from_base36_convenience(self):
+        """Module-level from_base36() must work like KSUID.from_base36()."""
+        ksuid = generate()
+        b36 = ksuid.to_base36()
+        assert from_base36(b36) == ksuid
+
+    def test_from_base36_invalid_length(self):
+        """Wrong-length base36 string must raise ValueError."""
+        with pytest.raises(ValueError, match="exactly 31 characters"):
+            KSUID.from_base36("abc")
+        with pytest.raises(ValueError, match="exactly 31 characters"):
+            KSUID.from_base36("a" * 40)
+
+    def test_from_base36_invalid_chars(self):
+        """Uppercase or special chars must be rejected."""
+        with pytest.raises(ValueError, match="Invalid base36 character"):
+            KSUID.from_base36("A" * 31)
+        with pytest.raises(ValueError, match="Invalid base36 character"):
+            KSUID.from_base36("!" * 31)
+
+    def test_from_base36_overflow(self):
+        """Max base36 31-char string must raise if it exceeds 20-byte max."""
+        with pytest.raises(ValueError, match="exceeds maximum"):
+            KSUID.from_base36("z" * 31)
+
+    def test_lowercase_sortability(self):
+        """Base36 strings of KSUIDs with increasing timestamps must sort."""
+        ts1, ts2, ts3 = 1609459200, 1609459201, 1609459202
+        payload = b'\x00' * 16
+        s1 = KSUID(timestamp=ts1, payload=payload).to_base36()
+        s2 = KSUID(timestamp=ts2, payload=payload).to_base36()
+        s3 = KSUID(timestamp=ts3, payload=payload).to_base36()
+        assert s1 < s2 < s3
+
+    def test_generate_lowercase_uniqueness(self):
+        """100 lowercase KSUIDs must all be distinct."""
+        ids = {generate_lowercase() for _ in range(100)}
+        assert len(ids) == 100
+
+    def test_generate_token_lowercase_length(self):
+        """Lowercase token must be exactly 31 characters."""
+        assert len(generate_token_lowercase()) == _BASE36_STRING_LENGTH
+
+    def test_generate_token_lowercase_charset(self):
+        """Lowercase token must contain only 0-9a-z."""
+        valid = set("0123456789abcdefghijklmnopqrstuvwxyz")
+        token = generate_token_lowercase()
+        assert all(c in valid for c in token)
+
+    def test_generate_token_lowercase_uniqueness(self):
+        """100 lowercase tokens must all be distinct."""
+        tokens = {generate_token_lowercase() for _ in range(100)}
+        assert len(tokens) == 100
+
+    def test_zero_value_base36_round_trip(self):
+        """All-zero KSUID must encode to 31 '0' chars in base36."""
+        ksuid = KSUID(timestamp=EPOCH, payload=b'\x00' * 16)
+        s = ksuid.to_base36()
+        assert len(s) == _BASE36_STRING_LENGTH
+        assert s == '0' * _BASE36_STRING_LENGTH
+        assert KSUID.from_base36(s) == ksuid
+
+    def test_max_value_base36_round_trip(self):
+        """Max-timestamp, max-payload KSUID must round-trip via base36."""
+        ksuid = KSUID(timestamp=EPOCH + 2**32 - 1, payload=b'\xff' * 16)
+        s = ksuid.to_base36()
+        assert len(s) == _BASE36_STRING_LENGTH
+        assert KSUID.from_base36(s) == ksuid
+
+
 class TestEdgeCases:
     """Edge cases for encoding / decoding."""
 
@@ -379,11 +482,10 @@ if __name__ == "__main__":
     assert ksuid1 == ksuid2
     print("Round-trip test passed!")
     
-    # Test sortability
-    import time
-    time.sleep(0.001)  # Ensure different timestamp
-    ksuid3 = generate()
-    assert ksuid1 < ksuid3
+    # Test sortability (use explicit timestamps to avoid flaky 1ms sleep)
+    earlier = KSUID(timestamp=1609459200, payload=b'\x00' * 16)
+    later = KSUID(timestamp=1609459201, payload=b'\x00' * 16)
+    assert earlier < later
     print("Sortability test passed!")
     
     print("\nAll basic tests passed! Run with pytest for comprehensive testing.") 
