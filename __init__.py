@@ -20,12 +20,13 @@ Usage:
 """
 
 import os
+import secrets
 import time
 from datetime import datetime, timezone
 from typing import Union, Optional
 
 __version__ = "1.0.0"
-__all__ = ["KSUID", "generate", "from_string", "from_bytes"]
+__all__ = ["KSUID", "generate", "generate_token", "from_string", "from_bytes"]
 
 # KSUID epoch (May 13, 2014 16:53:20 UTC)
 EPOCH = 1400000000
@@ -43,14 +44,16 @@ BASE62_BASE = len(BASE62_ALPHABET)
 class KSUID:
     """
     K-Sortable Unique Identifier
-    
+
     A KSUID is a 20-byte identifier consisting of:
     - 4-byte timestamp (seconds since KSUID epoch)
     - 16-byte random payload
-    
+
     KSUIDs are naturally sortable by creation time and collision-resistant.
     """
-    
+
+    __slots__ = ('_timestamp', '_payload', '_bytes')
+
     def __init__(self, timestamp: Optional[int] = None, payload: Optional[bytes] = None):
         """
         Create a new KSUID.
@@ -225,6 +228,20 @@ def _base62_decode(s: str) -> bytes:
 def generate() -> KSUID:
     """Generate a new KSUID."""
     return KSUID()
+
+
+def generate_token() -> str:
+    """Generate a cryptographically secure opaque token as a base62 string.
+
+    Unlike KSUIDs, tokens use 20 bytes (160 bits) of pure random data from
+    ``secrets.token_bytes`` with no embedded timestamp.  This makes them
+    suitable for API keys, session secrets, and other security-sensitive
+    values where the creation time should not be leaked.
+
+    Returns:
+        A 27-character base62 string with 160 bits of entropy.
+    """
+    return _base62_encode(secrets.token_bytes(TOTAL_LENGTH))
 
 
 def from_string(ksuid_str: str) -> KSUID:

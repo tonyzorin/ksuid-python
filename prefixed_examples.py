@@ -10,7 +10,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from __init__ import KSUID, generate, from_string
+from __init__ import KSUID, generate, generate_token, from_string
 from typing import Dict, Optional, Tuple
 import re
 
@@ -194,24 +194,20 @@ def create_order_id() -> str:
     return PrefixedKSUID.create('ord')
 
 def create_api_key() -> str:
-    """Create an API key identifier: ak_...
+    """Create a secure API key: ak_...
 
-    WARNING: KSUIDs are not cryptographically suitable as secret API keys.
-    They embed a predictable timestamp and have only 128 bits of randomness.
-    Use this for public API key *identifiers* only, not for secret tokens.
-    For secrets, use the ``secrets`` module instead.
+    Uses 160 bits of cryptographically secure random data (no timestamp)
+    via ``generate_token()``, making it safe for use as a secret key.
     """
-    return PrefixedKSUID.create('ak')
+    return f"ak_{generate_token()}"
 
 def create_session_id() -> str:
-    """Create a session identifier: sess_...
+    """Create a secure session token: sess_...
 
-    WARNING: KSUIDs should not be used as session tokens for authentication.
-    They embed a predictable timestamp and have only 128 bits of randomness.
-    Use this for session *identifiers* in logs/tracing, not as bearer tokens.
-    For session secrets, use the ``secrets`` module instead.
+    Uses 160 bits of cryptographically secure random data (no timestamp)
+    via ``generate_token()``, making it safe for use as a bearer token.
     """
-    return PrefixedKSUID.create('sess')
+    return f"sess_{generate_token()}"
 
 
 def demo_basic_usage():

@@ -14,6 +14,21 @@ from __init__ import KSUID, generate, from_string
 from datetime import datetime
 
 
+MAX_COUNT = 1_000_000
+
+
+def _validate_count(value):
+    """Validate --count is a positive integer within bounds."""
+    ivalue = int(value)
+    if ivalue < 1:
+        raise argparse.ArgumentTypeError("count must be at least 1")
+    if ivalue > MAX_COUNT:
+        raise argparse.ArgumentTypeError(
+            f"count must be at most {MAX_COUNT:,}"
+        )
+    return ivalue
+
+
 def cmd_generate(args):
     """Generate one or more KSUIDs."""
     for _ in range(args.count):
@@ -127,10 +142,10 @@ Examples:
     # Generate command
     gen_parser = subparsers.add_parser('generate', help='Generate KSUIDs')
     gen_parser.add_argument(
-        '-c', '--count', 
-        type=int, 
-        default=1, 
-        help='Number of KSUIDs to generate (default: 1)'
+        '-c', '--count',
+        type=_validate_count,
+        default=1,
+        help='Number of KSUIDs to generate (default: 1, max: 1,000,000)'
     )
     gen_parser.add_argument(
         '-v', '--verbose', 
@@ -158,10 +173,10 @@ Examples:
     # Benchmark command
     bench_parser = subparsers.add_parser('benchmark', help='Run benchmark')
     bench_parser.add_argument(
-        '-c', '--count', 
-        type=int, 
-        default=10000, 
-        help='Number of KSUIDs to generate (default: 10000)'
+        '-c', '--count',
+        type=_validate_count,
+        default=10000,
+        help='Number of KSUIDs to generate (default: 10000, max: 1,000,000)'
     )
     bench_parser.set_defaults(func=cmd_benchmark)
     

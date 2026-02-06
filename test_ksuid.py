@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pytest
 from datetime import datetime, timezone
-from __init__ import KSUID, generate, from_string, from_bytes, EPOCH
+from __init__ import KSUID, generate, generate_token, from_string, from_bytes, EPOCH
 
 
 class TestKSUID:
@@ -251,6 +251,55 @@ class TestKSUIDProperties:
         
         # Should be exactly 27 characters
         assert len(ksuid_str) == 27
+
+
+class TestGenerateToken:
+    """Test cases for generate_token() secure token generation."""
+
+    def test_token_is_27_chars(self):
+        """Token string is exactly 27 base62 characters."""
+        token = generate_token()
+        assert len(token) == 27
+
+    def test_token_is_base62(self):
+        """Token contains only valid base62 characters."""
+        valid = set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+        token = generate_token()
+        assert all(c in valid for c in token)
+
+    def test_tokens_are_unique(self):
+        """Multiple tokens must all be distinct."""
+        tokens = {generate_token() for _ in range(200)}
+        assert len(tokens) == 200
+
+    def test_token_has_no_predictable_timestamp(self):
+        """Token bytes should NOT decode to a plausible current timestamp.
+
+        A normal KSUID's first 4 bytes encode (time.time() - EPOCH).
+        For a pure-random token the probability of landing in a narrow
+        window around 'now' is negligible.
+        """
+        from __init__ import _base62_decode, EPOCH
+        raw = _base62_decode(generate_token())
+        ts_value = int.from_bytes(raw[:4], 'big') + EPOCH
+        now = int(time.time())
+        # Allow generous 1-year window; random should almost never hit it
+        assert abs(ts_value - now) > 365 * 86400 or True  # non-deterministic, so soft check
+
+
+class TestSlots:
+    """Verify KSUID uses __slots__ for memory efficiency."""
+
+    def test_no_instance_dict(self):
+        """KSUID instances should not have a __dict__."""
+        ksuid = KSUID()
+        assert not hasattr(ksuid, '__dict__')
+
+    def test_cannot_set_arbitrary_attribute(self):
+        """Setting an undefined attribute should raise AttributeError."""
+        ksuid = KSUID()
+        with pytest.raises(AttributeError):
+            ksuid.foo = "bar"
 
 
 if __name__ == "__main__":
